@@ -1,11 +1,10 @@
 name: quality-check
 
-# Cuándo corre este workflow
 on:
   push:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
   pull_request:
-    branches: [ "main", "develop" ]
+    branches: ["main", "develop"]
   workflow_dispatch:
 
 jobs:
@@ -16,41 +15,56 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node 20
         uses: actions/setup-node@v4
         with:
           node-version: "20"
-          cache: "pnpm"
 
       - name: Install pnpm
         run: npm i -g pnpm@9
 
+      - name: Get pnpm store path
+        id: pnpm-cache
+        shell: bash
+        run: echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
+
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Si tienes lint en varios apps: pnpm -r lint
-      - name: Lint
+      # --- Calidad: lint ---
+      - name: Lint (if script exists)
+        shell: bash
         run: |
-          if pnpm run | grep -q "lint"; then
+          if pnpm -s run | grep -qE "^ *lint"; then
             pnpm lint
           else
-            echo "No lint script found at root, skipping."
+            echo "No root lint script found. Skipping."
           fi
 
-      # Typecheck opcional
-      - name: Typecheck
+      # --- Calidad: typecheck ---
+      - name: Typecheck (if script exists)
+        shell: bash
         run: |
-          if pnpm run | grep -q "typecheck"; then
+          if pnpm -s run | grep -qE "^ *typecheck"; then
             pnpm typecheck
           else
-            echo "No typecheck script found at root, skipping."
+            echo "No root typecheck script found. Skipping."
           fi
 
-      # Tests
-      - name: Tests
+      # --- Calidad: tests ---
+      - name: Tests (if script exists)
+        shell: bash
         run: |
-          if pnpm run | grep -q "test"; then
+          if pnpm -s run | grep -qE "^ *test"; then
             pnpm test
           else
-            echo "No test script found at root, skipping."
+            echo "No root test script found. Skipping."
           fi
